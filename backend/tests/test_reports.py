@@ -35,7 +35,24 @@ def sample_report() -> dict[str, object]:
         "observed_at": "2026-09-22T18:30:00Z",
     }
 
-
+def sample_english_report() -> dict[str, object]:
+    return {
+        "external_id": "US-NYC-2026-002",
+        "title": "Synthetic infrastructure report",
+        "content": (
+            "A synthetic infrastructure event was observed "
+            "near New York City for testing purposes."
+        ),
+        "language": "en",
+        "source_type": "open_source",
+        "source_name": "Synthetic Open Source Feed",
+        "location": {
+            "latitude": 40.7128,
+            "longitude": -74.0060,
+        },
+        "observed_at": "2026-09-22T19:00:00Z",
+    }
+    
 def test_create_multilingual_report() -> None:
     response = client.post("/api/v1/reports", json=sample_report())
 
@@ -107,3 +124,103 @@ def test_timestamp_without_timezone_is_rejected() -> None:
     response = client.post("/api/v1/reports", json=report)
 
     assert response.status_code == 422
+def test_filter_reports_by_language() -> None:
+    client.post("/api/v1/reports", json=sample_report())
+    client.post("/api/v1/reports", json=sample_english_report())
+
+    response = client.get(
+        "/api/v1/reports",
+        params={"language": "tr"},
+    )
+
+    assert response.status_code == 200
+
+    reports = response.json()
+
+    assert len(reports) == 1
+    assert reports[0]["language"] == "tr"
+
+
+def test_filter_reports_by_source_type() -> None:
+    client.post("/api/v1/reports", json=sample_report())
+    client.post("/api/v1/reports", json=sample_english_report())
+
+    response = client.get(
+        "/api/v1/reports",
+        params={"source_type": "open_source"},
+    )
+
+    assert response.status_code == 200
+
+    reports = response.json()
+
+    assert len(reports) == 1
+    assert reports[0]["external_id"] == "US-NYC-2026-002"
+
+
+def test_filter_reports_by_geographic_bounding_box() -> None:
+    client.post("/api/v1/reports", json=sample_report())
+    client.post("/api/v1/reports", json=sample_english_report())
+
+    response = client.get(
+        "/api/v1/reports",
+        params={
+            "min_latitude": 40.5,
+            "max_latitude": 41.5,
+            "min_longitude": 28.0,
+            "max_longitude": 30.0,
+        },
+    )
+
+    assert response.status_code == 200
+
+    reports = response.json()
+
+    assert len(reports) == 1
+    assert reports[0]["external_id"] == "TR-IST-2026-001"
+
+
+def test_search_with_no_matches_returns_empty_list() -> None:
+    client.post("/api/v1/reports", json=sample_report())
+
+    response = client.get(
+        "/api/v1/reports",
+        params={"language": "es"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_incomplete_bounding_box_is_rejected() -> None:
+    response = client.get(
+        "/api/v1/reports",
+        params={
+            "min_latitude": 40.0,
+            "max_latitude": 42.0,
+        },
+    )
+
+    assert response.status_code == 422
+    assert (
+        response.json()["detail"]["code"]
+        == "incomplete_bounding_box"
+    )
+
+
+def test_reversed_latitude_range_is_rejected() -> None:
+    response = client.get(
+        "/api/v1/reports",
+        params={
+            "min_latitude": 42.0,
+            "max_latitude": 40.0,
+            "min_longitude": 28.0,
+            "max_longitude": 30.0,
+        },
+    )
+
+    assert response.status_code == 422
+    assert (
+        response.json()["detail"]["code"]
+        == "invalid_latitude_range"
+    )

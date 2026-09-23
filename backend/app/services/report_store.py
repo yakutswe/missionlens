@@ -6,6 +6,7 @@ from backend.app.models.report import (
     ReportCreate,
     ReportResponse,
     ReportStatus,
+    SourceType,
 )
 
 
@@ -43,8 +44,60 @@ class ReportStore:
             return report
 
     def list_all(self) -> list[ReportResponse]:
+        return self.search()
+
+    def search(
+        self,
+        *,
+        language: str | None = None,
+        source_type: SourceType | None = None,
+        min_latitude: float | None = None,
+        max_latitude: float | None = None,
+        min_longitude: float | None = None,
+        max_longitude: float | None = None,
+    ) -> list[ReportResponse]:
         with self._lock:
             reports = list(self._reports_by_external_id.values())
+
+        if language is not None:
+            reports = [
+                report
+                for report in reports
+                if report.language == language
+            ]
+
+        if source_type is not None:
+            reports = [
+                report
+                for report in reports
+                if report.source_type == source_type
+            ]
+
+        coordinates = (
+            min_latitude,
+            max_latitude,
+            min_longitude,
+            max_longitude,
+        )
+
+        if all(value is not None for value in coordinates):
+            assert min_latitude is not None
+            assert max_latitude is not None
+            assert min_longitude is not None
+            assert max_longitude is not None
+
+            reports = [
+                report
+                for report in reports
+                if (
+                    min_latitude
+                    <= report.location.latitude
+                    <= max_latitude
+                    and min_longitude
+                    <= report.location.longitude
+                    <= max_longitude
+                )
+            ]
 
         return sorted(
             reports,
