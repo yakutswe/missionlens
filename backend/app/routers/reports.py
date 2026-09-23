@@ -1,23 +1,28 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from backend.app.dependencies import get_report_repository
+from backend.app.services.report_repository import (
+    DuplicateReportError,
+    ReportRepository,
+)
 
 from backend.app.models.report import (
     ReportCreate,
     ReportResponse,
     SourceType,
 )
-from backend.app.services.report_store import (
-    DuplicateReportError,
-    report_store,
-)
-
 
 router = APIRouter(
     prefix="/api/v1/reports",
     tags=["reports"],
 )
 
+ReportRepositoryDependency = Annotated[
+    ReportRepository,
+    Depends(get_report_repository),
+]
 
 @router.post(
     "",
@@ -25,9 +30,12 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
     summary="Ingest a mission report",
 )
-async def create_report(report_data: ReportCreate) -> ReportResponse:
+async def create_report(
+    report_data: ReportCreate,
+    repository: ReportRepositoryDependency,
+) -> ReportResponse:
     try:
-        return report_store.create(report_data)
+        return repository.create(report_data)
     except DuplicateReportError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -38,15 +46,16 @@ async def create_report(report_data: ReportCreate) -> ReportResponse:
             },
         ) from error
 
-
 @router.get(
     "",
     response_model=list[ReportResponse],
     summary="Search ingested reports",
 )
 async def list_reports(
+    repository: ReportRepositoryDependency,
     language: Annotated[
         str | None,
+
         Query(
             pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$",
             description="Filter by language code.",
@@ -122,7 +131,7 @@ async def list_reports(
             },
         )
 
-    return report_store.search(
+    return repository.search(
         language=language,
         source_type=source_type,
         min_latitude=min_latitude,

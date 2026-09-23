@@ -1,23 +1,13 @@
 from datetime import datetime, timezone
 from threading import RLock
 from uuid import uuid4
-
+from backend.app.services.report_repository import DuplicateReportError
 from backend.app.models.report import (
     ReportCreate,
     ReportResponse,
     ReportStatus,
     SourceType,
 )
-
-
-class DuplicateReportError(Exception):
-    """Raised when a source submits the same external report twice."""
-
-    def __init__(self, external_id: str) -> None:
-        self.external_id = external_id
-        super().__init__(
-            f"A report with external_id '{external_id}' already exists."
-        )
 
 
 class ReportStore:

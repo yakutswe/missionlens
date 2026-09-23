@@ -5,18 +5,24 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.services.report_store import report_store
-
+from backend.app.dependencies import get_report_repository
 
 client = TestClient(app)
 
-
 @pytest.fixture(autouse=True)
 def reset_report_store() -> Generator[None, None, None]:
+    app.dependency_overrides[get_report_repository] = (
+        lambda: report_store
+    )
     report_store.clear()
+
     yield
+
     report_store.clear()
-
-
+    app.dependency_overrides.pop(
+        get_report_repository,
+        None,
+    )
 def sample_report() -> dict[str, object]:
     return {
         "external_id": "TR-IST-2026-001",
