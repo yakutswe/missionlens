@@ -1,5 +1,5 @@
 from logging.config import fileConfig
-from typing import Any
+from typing import Any, Literal, MutableMapping
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -29,8 +29,19 @@ assert ReportRecord.__tablename__ == "reports"
 
 def include_name(
     name: str | None,
-    type_: str,
-    parent_names: dict[str, str | None],
+    type_: Literal[
+        "schema",
+        "table",
+        "column",
+        "index",
+        "unique_constraint",
+        "foreign_key_constraint",
+        "check_constraint",
+    ],
+    parent_names: MutableMapping[
+        Literal["schema_name", "table_name", "schema_qualified_table_name"],
+        str | None,
+    ],
 ) -> bool:
     if type_ == "table":
         return name in MANAGED_TABLES
