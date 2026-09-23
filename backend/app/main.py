@@ -4,6 +4,8 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from backend.app.routers.reports import router as reports_router
+
 
 SERVICE_NAME = "missionlens-api"
 SERVICE_VERSION = "0.1.0"
@@ -24,6 +26,8 @@ app = FastAPI(
     ),
     version=SERVICE_VERSION,
 )
+
+app.include_router(reports_router)
 
 
 @app.get(
