@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from backend.app.routers.reports import router as reports_router
+from backend.app.routers.cases import router as cases_router
 
 
 SERVICE_NAME = "missionlens-api"
@@ -28,6 +29,7 @@ app = FastAPI(
 )
 
 app.include_router(reports_router)
+app.include_router(cases_router)
 
 
 @app.get(

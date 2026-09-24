@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from threading import RLock
 from uuid import uuid4
+from uuid import UUID
 from backend.app.services.report_repository import DuplicateReportError
 from backend.app.models.report import (
     ReportCreate,
@@ -35,6 +36,10 @@ class ReportStore:
 
     def list_all(self) -> list[ReportResponse]:
         return self.search()
+
+    def has_id(self, report_id: UUID) -> bool:
+        with self._lock:
+            return any(report.id == report_id for report in self._reports_by_external_id.values())
 
     def search(
         self,
