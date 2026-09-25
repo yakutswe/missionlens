@@ -14,6 +14,21 @@ The current implementation pairs a tested FastAPI and PostgreSQL/PostGIS backend
 
 **Analyst scenario:** Three fictional English, Turkish, and Spanish reports describe a delay near the same terminal. Their sources do not establish a cause. Load the sample reports, compare the three observations, and create a case that records what still needs verification. Two unrelated reports show why selecting evidence matters.
 
+## Product Walkthrough
+
+### Analyst report explorer
+
+Analysts can search multilingual reports, review source and geospatial context, and select evidence for an investigation case.
+
+![MissionLens analyst report explorer](docs/report-explorer.png)
+
+### Supervisor decision history
+
+Supervisors can review proposed actions, record reasoned decisions, and inspect the corresponding audit history. The demonstration records decisions but does not execute operational actions.
+
+![MissionLens supervisor decision history](docs/audit-history.png)
+
+
 ## Current Status
 
 The working local demonstration supports:
