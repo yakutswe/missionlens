@@ -2,28 +2,41 @@
 
 MissionLens is a portfolio-scale mission intelligence platform for ingesting, validating, searching, and reviewing multilingual geospatial reports.
 
-The current implementation is a tested FastAPI backend with durable PostgreSQL/PostGIS persistence. The broader product vision includes an analyst map, investigation cases, approval-controlled actions, object storage, caching, and audit history.
+The current implementation pairs a tested FastAPI and PostgreSQL/PostGIS backend with a React analyst workspace for reviewing reports and creating cases from selected evidence.
 
 > MissionLens is an independent portfolio project. It uses only synthetic demonstration data and is not affiliated with any government organization.
 
+## Five-minute tour
+
+**Working now:** Ingest and search reports, select evidence, save a case, request supervisor review of a proposed action, and record a decision with audit events. The React workspace and PostgreSQL/PostGIS backend run locally.
+
+**Planned next:** Real identity integration, production authorization, a geographic basemap, and deployment. The demo actor switch is spoofable and is not authentication; use synthetic data on localhost only.
+
+**Analyst scenario:** Three fictional English, Turkish, and Spanish reports describe a delay near the same terminal. Their sources do not establish a cause. Load the sample reports, compare the three observations, and create a case that records what still needs verification. Two unrelated reports show why selecting evidence matters.
+
 ## Current Status
 
-The operational backend currently supports:
+The working local demonstration supports:
 
 - Validated multilingual report ingestion
 - Durable PostgreSQL storage
 - PostGIS point geometry using SRID 4326
 - Language and source-type filtering
 - Geographic bounding-box search
+- Create and retrieve cases linked to existing report evidence
+- Preserve the order of reports selected as case evidence
 - Duplicate ingestion protection
 - Alembic database migrations
 - FastAPI dependency injection
 - Separate production and test repositories
-- Automated API tests
+- Automated API tests and a PostGIS persistence workflow in CI
 - Docker Compose infrastructure for PostgreSQL/PostGIS, Redis, and MinIO
-- Health monitoring through `/health`
+- API liveness through `/health` and database readiness through `/ready`
+- React and TypeScript workspace for browsing reports, reviewing source details, selecting evidence, and creating cases
+- Schematic coordinate view of report locations and five repeatable synthetic sample reports
+- Demo analyst requests, supervisor decisions, and database audit events; no external action is executed
 
-Cases, approvals, audit events, authentication, the React analyst interface, Redis integration, and object-storage integration remain planned.
+Authentication, case editing, a geographic basemap, Redis integration, and object-storage integration remain planned. Do not expose the local demo API to real users or sensitive data.
 
 ## Problem
 
@@ -36,7 +49,7 @@ Mission teams may receive large amounts of information from different sources, l
 - Control sensitive actions
 - Maintain a complete audit history
 
-MissionLens is designed to provide one controlled workflow for discovering, reviewing, connecting, and acting on mission-relevant information.
+MissionLens demonstrates a local workflow for discovering, reviewing, and connecting synthetic reports before recording a proposed decision. It does not execute operational actions.
 
 ## Users
 
@@ -89,6 +102,8 @@ GET /health
 
 Returns the service name, version, health status, and UTC timestamp.
 
+`GET /ready` checks the database connection and returns HTTP `503` if PostgreSQL is unavailable. `/health` checks only that the API process is running.
+
 ### Ingest a report
 
 ```http
@@ -111,14 +126,48 @@ GET /api/v1/reports
 
 Supported filters:
 
+- `query` (case-insensitive title, content, source name, and external ID search)
 - `language`
 - `source_type`
 - `min_latitude`
 - `max_latitude`
 - `min_longitude`
 - `max_longitude`
+- `limit` (1–100, default 20)
+- `offset` (zero-based)
 
-Geographic search uses a PostGIS envelope and `ST_Intersects`. All four bounding-box coordinates must be provided together.
+Results have a stable order and the `X-Total-Count` response header gives the number of matching reports across all pages. `GET /api/v1/reports/languages` returns available language tags. Geographic search uses a PostGIS envelope and `ST_Intersects`; all four bounding-box coordinates must be provided together. Keyword search currently uses substring matching, so an index or full-text search will be needed at larger scale.
+
+### Create and review a case
+
+```http
+POST /api/v1/cases
+GET /api/v1/cases
+GET /api/v1/cases/{case_id}
+```
+
+Create a case with a title, summary, and one or more existing report IDs:
+
+```json
+{
+  "title": "Review synthetic observation",
+  "summary": "Compare the linked reports before proposing any action.",
+  "report_ids": ["<UUID returned by POST /api/v1/reports>"]
+}
+```
+
+Missing reports reject the whole request with HTTP `422`; duplicate report IDs are rejected. The case and its ordered report links are saved in one database transaction. Case responses include report titles in evidence order; the case list loads those titles in a batch.
+
+### Local demo approval and audit flow
+
+```http
+POST /api/v1/cases/{case_id}/approvals
+GET /api/v1/approvals
+POST /api/v1/approvals/{approval_id}/decision
+GET /api/v1/audit-events
+```
+
+The request endpoint accepts an `action_description`. The decision endpoint accepts `{"decision":"approved" | "rejected", "reason":"..."}`; decisions are final and do not execute any action. For the local demo, set `X-Demo-Actor: analyst-demo` when requesting approval and `X-Demo-Actor: supervisor-demo` when deciding or viewing audit events. The actor header is **user-controlled and spoofable**. It tests workflow roles, not real identity or access control. Approval state and its corresponding audit event are committed together; a database trigger rejects updates or deletes of audit events. Production use requires a trusted identity provider and a separate security review.
 
 Interactive OpenAPI documentation is available at:
 
@@ -147,13 +196,13 @@ http://127.0.0.1:8000/docs
 - Redis
 - MinIO S3-compatible object storage
 
-### Planned Frontend
+### Implemented Frontend
 
 - React
 - TypeScript
 - Vite
-- MapLibre
-- Vitest
+
+The coordinate view is a schematic SVG plot; MapLibre and frontend test automation remain planned.
 
 ## Local Setup
 
@@ -180,6 +229,7 @@ Copy-Item .env.example .env
 ```
 
 The local `.env` file is ignored by Git and must not contain production credentials.
+The Compose services bind to `127.0.0.1` for this local demonstration.
 
 ### 4. Start local infrastructure
 
@@ -231,6 +281,22 @@ http://127.0.0.1:8000/docs
 python -m pytest backend\tests -q
 ```
 
+The full suite also contains one PostGIS integration test that is skipped in ordinary local runs. GitHub Actions starts an isolated PostGIS service, applies migrations, and runs that test alongside the API tests and the frontend build. The CI database uses synthetic data only.
+
+### 8. Run the analyst workspace
+
+Leave the API running in its own terminal. From a second terminal:
+
+```powershell
+cd frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+Open `http://127.0.0.1:5173`. Click **Load synthetic demo data** to add five fictional reports (duplicates are skipped). Click **Draft example case** to prefill three linked observations for review; nothing is submitted until you create the case. Propose an action, switch to the **Supervisor** demo actor, record a reasoned decision, and view the audit history. No external action runs. Search and pagination run through FastAPI, and the location grid displays the current results page. The Vite development server forwards `/api` requests to FastAPI on port 8000.
+
+For a production frontend build, run `npm.cmd run build` inside `frontend`.
+
 ## Design Decisions
 
 ### Repository abstraction
@@ -265,14 +331,14 @@ FastAPI dependency overrides keep unit tests fast and deterministic without weak
 4. Search by language, source, time, keyword, and location.
 5. Display matching events on an analyst map.
 6. Add relevant reports to an investigation case.
-7. Submit a proposed action for supervisor approval.
-8. Approve or reject the action.
-9. Record important events in an append-only audit trail.
+7. Submit a proposed action for local demo supervisor review.
+8. Record an approval or rejection, without executing the proposed action.
+9. Persist request and decision events in an append-only database table.
 
 ## Planned Architecture
 
-- React analyst workspace for search, maps, cases, and approvals
-- FastAPI services for reports, cases, approvals, users, and audit events
+- React analyst workspace for reports, cases, and demo approvals (basemap planned)
+- FastAPI services for reports, cases, demo approvals, and audit events (trusted identity planned)
 - Redis for caching, rate limiting, job state, and idempotency
 - MinIO for original reports and multimedia
 - Background ingestion and metadata-normalization workers
@@ -283,7 +349,7 @@ FastAPI dependency overrides keep unit tests fast and deterministic without weak
 
 ## Security Principles
 
-MissionLens is designed around:
+Future production deployment would require trusted identity, independent authorization enforcement, security review, and operational controls. The local demo currently has input validation, a localhost-only database port, atomic approval/audit writes, and a database trigger that rejects audit-event modification. Planned controls include:
 
 - Least-privilege authorization
 - Role-based access control
@@ -306,21 +372,22 @@ MissionLens is designed around:
 - Geographic filtering
 - Automated tests
 
-### Phase 2: Durable Data Foundation — In Progress
+### Phase 2: Durable Data Foundation — Database Complete
 
 - PostgreSQL/PostGIS persistence
 - Alembic migrations
 - Docker Compose infrastructure
 - Repository-based dependency injection
-- Redis and MinIO application integration
+
+Redis and MinIO containers are available, but application integration is planned.
 
 ### Phase 3: Mission Workflow
 
-- React and MapLibre analyst workspace
-- Cases and evidence organization
+- React analyst workspace — report browsing, schematic location view, case creation, and demo approval review implemented; MapLibre basemap planned
+- Cases and evidence organization — create/list/detail API and case creation UI implemented; case editing planned
 - Proposed actions
-- Supervisor approval
-- Append-only audit history
+- Demo supervisor approval decisions (real user authentication planned)
+- Append-only approval audit events
 
 ### Phase 4: Deployment and Operations
 
@@ -342,7 +409,7 @@ MissionLens is designed around:
 
 ## Success Criteria
 
-- Privileged endpoints verify user roles.
+- Privileged endpoints verify authenticated user roles before any real-user rollout.
 - Every approval decision creates an audit event.
 - Duplicate ingestion is handled safely.
 - Critical workflows have automated test coverage.

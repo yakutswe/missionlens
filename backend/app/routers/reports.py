@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from backend.app.dependencies import get_report_repository
 from backend.app.services.report_repository import (
@@ -53,6 +53,10 @@ async def create_report(
 )
 async def list_reports(
     repository: ReportRepositoryDependency,
+    response: Response,
+    query: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
     language: Annotated[
         str | None,
 
@@ -131,11 +135,21 @@ async def list_reports(
             },
         )
 
-    return repository.search(
+    page = repository.search_page(
         language=language,
         source_type=source_type,
         min_latitude=min_latitude,
         max_latitude=max_latitude,
         min_longitude=min_longitude,
         max_longitude=max_longitude,
+        query=query,
+        limit=limit,
+        offset=offset,
     )
+    response.headers["X-Total-Count"] = str(page.total)
+    return page.items
+
+
+@router.get("/languages", response_model=list[str])
+def list_languages(repository: ReportRepositoryDependency) -> list[str]:
+    return repository.languages()

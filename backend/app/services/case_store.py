@@ -21,7 +21,8 @@ class CaseStore:
                 if not self._reports.has_id(report_id):
                     raise UnknownReportError(report_id)
             case = CaseResponse(
-                **data.model_dump(), id=uuid4(), created_at=datetime.now(timezone.utc)
+                **data.model_dump(), id=uuid4(), created_at=datetime.now(timezone.utc),
+                report_titles=[self._reports.title_for_id(id) for id in data.report_ids],
             )
             self._cases[case.id] = case
             return case

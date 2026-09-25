@@ -29,17 +29,24 @@ This is a local portfolio demonstration using only synthetic data.
 4. Open `http://127.0.0.1:5173`. The Vite development server proxies `/api`
    requests to FastAPI at `http://127.0.0.1:8000`.
 
-Use **Load synthetic demo data** to add five fictional reports. The action is
-repeatable: reports with the same external IDs are skipped. Select reports as
-evidence, enter a title and summary, and create a case. Cases are stored in
-PostgreSQL by the backend.
+Use **Load synthetic demo data** to add five fictional reports. Three reports
+in English, Turkish, and Spanish describe a possible terminal access delay;
+two other reports are unrelated. **Draft example case** selects the three
+related reports and fills the case form for review; it does not save a case.
+The load action is repeatable: reports with the same external IDs are skipped.
+Cases are stored in PostgreSQL by the backend once submitted.
+An analyst can propose an action for a case, then switch to the Supervisor
+demo actor to record a reasoned decision and see its audit events. The actor
+switch is spoofable and exists solely for the local synthetic-data demo.
 
 ## Current boundaries
 
-- Keyword search is local to the loaded reports; the backend currently supports
-  language, source type, and bounding-box filters.
+- Keyword and language searches run on the backend with paginated results;
+  the backend also supports source-type and bounding-box filters. Keyword
+  search is currently substring matching and needs indexing at larger scale.
 - The SVG view places reports using real latitude/longitude coordinates on a
   schematic grid. It has no geographic basemap or MapLibre integration yet.
-- There is no login, authorization, approval workflow, or audit history yet.
+- There is no real authentication or trusted authorization. The approval and
+  audit workflow records decisions only; it executes no operational actions.
   Run it locally with synthetic data only.
 - Redis and MinIO are not used by this frontend slice.

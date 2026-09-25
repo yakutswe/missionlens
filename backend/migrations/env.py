@@ -5,7 +5,9 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from backend.app.db.base import Base
-from backend.app.db.models import ReportRecord, CaseRecord, CaseReportRecord
+from backend.app.db.models import (
+    ReportRecord, CaseRecord, CaseReportRecord, ApprovalRequestRecord, AuditEventRecord,
+)
 from backend.app.db.session import DATABASE_URL
 
 
@@ -21,12 +23,14 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-MANAGED_TABLES = {"reports", "cases", "case_reports"}
+MANAGED_TABLES = {"reports", "cases", "case_reports", "approval_requests", "audit_events"}
 
 # Importing ReportRecord registers the table with Base.metadata.
 assert ReportRecord.__tablename__ == "reports"
 assert CaseRecord.__tablename__ == "cases"
 assert CaseReportRecord.__tablename__ == "case_reports"
+assert ApprovalRequestRecord.__tablename__ == "approval_requests"
+assert AuditEventRecord.__tablename__ == "audit_events"
 
 
 def include_name(

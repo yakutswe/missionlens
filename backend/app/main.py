@@ -2,10 +2,17 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import FastAPI
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from backend.app.db.session import get_db_session
 
 from backend.app.routers.reports import router as reports_router
 from backend.app.routers.cases import router as cases_router
+from backend.app.routers.approvals import router as approvals_router
 
 
 SERVICE_NAME = "missionlens-api"
@@ -22,14 +29,16 @@ class HealthResponse(BaseModel):
 app = FastAPI(
     title="MissionLens API",
     description=(
-        "Secure mission-intelligence API for multilingual reports, "
-        "geospatial events, cases, approvals, and audit history."
+        "Local portfolio API for synthetic multilingual geospatial reports "
+        "and linked investigation cases. A synthetic-only demo approval and "
+        "audit workflow is provided; demo actor headers are not authentication."
     ),
     version=SERVICE_VERSION,
 )
 
 app.include_router(reports_router)
 app.include_router(cases_router)
+app.include_router(approvals_router)
 
 
 @app.get(
@@ -39,7 +48,7 @@ app.include_router(cases_router)
     summary="Check API health",
 )
 async def health_check() -> HealthResponse:
-    """Confirm that the MissionLens API process is available."""
+    """Confirm the API process is available; /ready checks the database."""
 
     return HealthResponse(
         status="healthy",
@@ -47,3 +56,15 @@ async def health_check() -> HealthResponse:
         version=SERVICE_VERSION,
         timestamp=datetime.now(timezone.utc),
     )
+
+
+@app.get("/ready", tags=["system"], summary="Check database readiness")
+def readiness_check(session: Session = Depends(get_db_session)) -> dict[str, str]:
+    try:
+        session.execute(text("SELECT 1"))
+    except SQLAlchemyError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable",
+        ) from error
+    return {"status": "ready"}

@@ -198,6 +198,30 @@ def test_search_with_no_matches_returns_empty_list() -> None:
     assert response.json() == []
 
 
+def test_search_paginates_and_reports_total() -> None:
+    client.post("/api/v1/reports", json=sample_report())
+    client.post("/api/v1/reports", json=sample_english_report())
+
+    first = client.get("/api/v1/reports", params={"limit": 1, "offset": 0})
+    second = client.get("/api/v1/reports", params={"limit": 1, "offset": 1})
+    assert first.status_code == second.status_code == 200
+    assert first.headers["x-total-count"] == second.headers["x-total-count"] == "2"
+    assert first.json()[0]["id"] != second.json()[0]["id"]
+    assert client.get("/api/v1/reports", params={"limit": 0}).status_code == 422
+    assert client.get("/api/v1/reports", params={"offset": -1}).status_code == 422
+
+
+def test_keyword_search_and_language_facets() -> None:
+    client.post("/api/v1/reports", json=sample_report())
+    client.post("/api/v1/reports", json=sample_english_report())
+
+    response = client.get("/api/v1/reports", params={"query": "infrastructure"})
+    assert response.status_code == 200
+    assert response.headers["x-total-count"] == "1"
+    assert response.json()[0]["language"] == "en"
+    assert client.get("/api/v1/reports/languages").json() == ["en", "tr"]
+
+
 def test_incomplete_bounding_box_is_rejected() -> None:
     response = client.get(
         "/api/v1/reports",

@@ -12,6 +12,8 @@ from backend.app.services.report_repository import (
 )
 from backend.app.services.case_repository import CaseRepository
 from backend.app.services.postgres_case_store import PostgresCaseStore
+from backend.app.services.approval_repository import ApprovalRepository
+from backend.app.services.postgres_approval_store import PostgresApprovalStore
 
 
 DatabaseSession = Annotated[
@@ -31,3 +33,8 @@ def get_report_repository(
 def get_case_repository(session: DatabaseSession) -> CaseRepository:
     """Provide PostgreSQL-backed case persistence to the API."""
     return PostgresCaseStore(session)
+
+
+def get_approval_repository(session: DatabaseSession) -> ApprovalRepository:
+    """Use the same database session for an approval and its audit event."""
+    return PostgresApprovalStore(session)

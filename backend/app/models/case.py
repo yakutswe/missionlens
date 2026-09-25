@@ -22,3 +22,4 @@ class CaseCreate(BaseModel):
 class CaseResponse(CaseCreate):
     id: UUID
     created_at: datetime
+    report_titles: list[str]

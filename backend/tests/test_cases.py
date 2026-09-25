@@ -30,7 +30,7 @@ def isolated_repositories() -> Generator[None, None, None]:
 def make_report(external_id: str) -> str:
     response = client.post("/api/v1/reports", json={
         "external_id": external_id,
-        "title": "Synthetic field observation",
+        "title": f"Synthetic field observation {external_id}",
         "content": "This is a synthetic observation created for case workflow testing.",
         "language": "en",
         "source_type": "field_report",
@@ -53,6 +53,9 @@ def test_create_case_preserves_report_evidence_order() -> None:
     assert response.status_code == 201
     case = response.json()
     assert case["report_ids"] == [second, first]
+    assert case["report_titles"] == [
+        "Synthetic field observation CASE-002", "Synthetic field observation CASE-001"
+    ]
     assert case["created_at"]
     assert client.get(f"/api/v1/cases/{case['id']}").json() == case
     assert client.get("/api/v1/cases").json() == [case]

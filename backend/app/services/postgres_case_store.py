@@ -45,18 +45,33 @@ class PostgresCaseStore:
         records = self._session.scalars(
             select(CaseRecord).order_by(CaseRecord.created_at.desc(), CaseRecord.id)
         ).all()
-        return [self._response(record) for record in records]
+        evidence = self._evidence([record.id for record in records])
+        return [self._response(record, evidence.get(record.id, [])) for record in records]
 
-    def _response(self, record: CaseRecord) -> CaseResponse:
-        report_ids = list(self._session.scalars(
-            select(CaseReportRecord.report_id)
-            .where(CaseReportRecord.case_id == record.id)
-            .order_by(CaseReportRecord.position)
-        ))
+    def _evidence(self, case_ids: list[UUID]) -> dict[UUID, list[tuple[UUID, str]]]:
+        if not case_ids:
+            return {}
+        rows = self._session.execute(
+            select(CaseReportRecord.case_id, CaseReportRecord.report_id, ReportRecord.title)
+            .join(ReportRecord, CaseReportRecord.report_id == ReportRecord.id)
+            .where(CaseReportRecord.case_id.in_(case_ids))
+            .order_by(CaseReportRecord.case_id, CaseReportRecord.position)
+        )
+        evidence: dict[UUID, list[tuple[UUID, str]]] = {}
+        for case_id, report_id, title in rows:
+            evidence.setdefault(case_id, []).append((report_id, title))
+        return evidence
+
+    def _response(
+        self, record: CaseRecord, links: list[tuple[UUID, str]] | None = None
+    ) -> CaseResponse:
+        if links is None:
+            links = self._evidence([record.id]).get(record.id, [])
         return CaseResponse(
             id=record.id,
             title=record.title,
             summary=record.summary,
-            report_ids=report_ids,
+            report_ids=[report_id for report_id, _ in links],
+            report_titles=[title for _, title in links],
             created_at=record.created_at,
         )

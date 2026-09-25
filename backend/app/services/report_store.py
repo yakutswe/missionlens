@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from threading import RLock
 from uuid import uuid4
 from uuid import UUID
-from backend.app.services.report_repository import DuplicateReportError
+from backend.app.services.report_repository import DuplicateReportError, ReportPage
 from backend.app.models.report import (
     ReportCreate,
     ReportResponse,
@@ -34,14 +34,22 @@ class ReportStore:
 
             return report
 
-    def list_all(self) -> list[ReportResponse]:
-        return self.search()
-
     def has_id(self, report_id: UUID) -> bool:
         with self._lock:
             return any(report.id == report_id for report in self._reports_by_external_id.values())
 
-    def search(
+    def title_for_id(self, report_id: UUID) -> str:
+        with self._lock:
+            return next(
+                report.title for report in self._reports_by_external_id.values()
+                if report.id == report_id
+            )
+
+    def languages(self) -> list[str]:
+        with self._lock:
+            return sorted({report.language for report in self._reports_by_external_id.values()})
+
+    def search_page(
         self,
         *,
         language: str | None = None,
@@ -50,7 +58,10 @@ class ReportStore:
         max_latitude: float | None = None,
         min_longitude: float | None = None,
         max_longitude: float | None = None,
-    ) -> list[ReportResponse]:
+        query: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> ReportPage:
         with self._lock:
             reports = list(self._reports_by_external_id.values())
 
@@ -67,6 +78,12 @@ class ReportStore:
                 for report in reports
                 if report.source_type == source_type
             ]
+
+        if query:
+            needle = query.casefold()
+            reports = [report for report in reports if needle in " ".join((
+                report.title, report.content, report.source_name, report.external_id
+            )).casefold()]
 
         coordinates = (
             min_latitude,
@@ -94,11 +111,12 @@ class ReportStore:
                 )
             ]
 
-        return sorted(
+        ordered = sorted(
             reports,
-            key=lambda report: report.ingested_at,
+            key=lambda report: (report.ingested_at, report.id),
             reverse=True,
         )
+        return ReportPage(items=ordered[offset:offset + limit], total=len(ordered))
 
     def clear(self) -> None:
         """Reset the temporary store between automated tests."""
