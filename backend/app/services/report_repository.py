@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Protocol
 
 from backend.app.models.report import (
@@ -17,6 +18,12 @@ class DuplicateReportError(Exception):
         )
 
 
+@dataclass(frozen=True)
+class ReportPage:
+    items: list[ReportResponse]
+    total: int
+
+
 class ReportRepository(Protocol):
     """Storage contract used by the reports API."""
 
@@ -26,7 +33,7 @@ class ReportRepository(Protocol):
     ) -> ReportResponse:
         ...
 
-    def search(
+    def search_page(
         self,
         *,
         language: str | None = None,
@@ -35,5 +42,10 @@ class ReportRepository(Protocol):
         max_latitude: float | None = None,
         min_longitude: float | None = None,
         max_longitude: float | None = None,
-    ) -> list[ReportResponse]:
+        query: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> ReportPage:
         ...
+
+    def languages(self) -> list[str]: ...

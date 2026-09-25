@@ -1,5 +1,5 @@
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,7 @@ from backend.app.models.report import (
     ReportStatus,
     SourceType,
 )
-from backend.app.services.report_repository import DuplicateReportError
+from backend.app.services.report_repository import DuplicateReportError, ReportPage
 
 class PostgresReportStore:
     """Persist and search mission reports using PostgreSQL/PostGIS."""
@@ -61,10 +61,7 @@ class PostgresReportStore:
             longitude=report_data.location.longitude,
         )
 
-    def list_all(self) -> list[ReportResponse]:
-        return self.search()
-
-    def search(
+    def search_page(
         self,
         *,
         language: str | None = None,
@@ -73,22 +70,28 @@ class PostgresReportStore:
         max_latitude: float | None = None,
         min_longitude: float | None = None,
         max_longitude: float | None = None,
-    ) -> list[ReportResponse]:
-        statement = select(
-            ReportRecord,
-            func.ST_Y(ReportRecord.location).label("latitude"),
-            func.ST_X(ReportRecord.location).label("longitude"),
-        )
+        query: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> ReportPage:
+        conditions = []
 
         if language is not None:
-            statement = statement.where(
-                ReportRecord.language == language
-            )
+            conditions.append(ReportRecord.language == language)
 
         if source_type is not None:
-            statement = statement.where(
-                ReportRecord.source_type == source_type.value
-            )
+            conditions.append(ReportRecord.source_type == source_type.value)
+
+        if query:
+            # Treat %, _ and ! as ordinary text, not SQL LIKE wildcards.
+            escaped = query.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            pattern = f"%{escaped}%"
+            conditions.append(or_(*(
+                column.ilike(pattern, escape="!") for column in (
+                    ReportRecord.title, ReportRecord.content,
+                    ReportRecord.source_name, ReportRecord.external_id,
+                )
+            )))
 
         coordinates = (
             min_latitude,
@@ -111,20 +114,27 @@ class PostgresReportStore:
                 4326,
             )
 
-            statement = statement.where(
+            conditions.append(
                 func.ST_Intersects(
                     ReportRecord.location,
                     bounding_box,
                 )
             )
 
-        statement = statement.order_by(
-            ReportRecord.ingested_at.desc()
-        )
+        total = self._session.scalar(
+            select(func.count()).select_from(ReportRecord).where(*conditions)
+        ) or 0
+        statement = select(
+            ReportRecord,
+            func.ST_Y(ReportRecord.location).label("latitude"),
+            func.ST_X(ReportRecord.location).label("longitude"),
+        ).where(*conditions).order_by(
+            ReportRecord.ingested_at.desc(), ReportRecord.id.desc()
+        ).limit(limit).offset(offset)
 
         rows = self._session.execute(statement).all()
 
-        return [
+        items = [
             self._to_response(
                 record=record,
                 latitude=float(latitude),
@@ -132,6 +142,12 @@ class PostgresReportStore:
             )
             for record, latitude, longitude in rows
         ]
+        return ReportPage(items=items, total=total)
+
+    def languages(self) -> list[str]:
+        return list(self._session.scalars(
+            select(ReportRecord.language).distinct().order_by(ReportRecord.language)
+        ))
 
     @staticmethod
     def _to_response(
