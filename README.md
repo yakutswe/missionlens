@@ -28,7 +28,6 @@ Supervisors can review proposed actions, record reasoned decisions, and inspect 
 
 ![MissionLens supervisor decision history](docs/audit-history.png)
 
-
 ## Current Status
 
 The working local demonstration supports:
@@ -94,16 +93,18 @@ MissionLens demonstrates a local workflow for discovering, reviewing, and connec
 
 ```mermaid
 flowchart TD
-    C[API Client] --> F[FastAPI]
-    F --> V[Pydantic Validation]
-    V --> R[Report Repository]
-    R --> P[PostgreSQL Report Store]
+    U[React Analyst Workspace] --> A["FastAPI Routers: reports, cases, approvals, audit"]
+    C[External API Clients] --> A
+    A --> V[Pydantic Validation]
+    V --> I[Repository Interfaces]
+    I -->|Production| P[PostgreSQL Repository Implementations]
     P --> D[(PostgreSQL and PostGIS)]
-    T[Pytest] --> M[In-Memory Report Store]
-    M --> R
+    I -->|Tests| M[In-Memory Repository Implementations]
+    T[Pytest] --> O[FastAPI Dependency Overrides]
+    O --> M
 ```
 
-Production requests receive a SQLAlchemy session through FastAPI dependency injection and use `PostgresReportStore`. Unit tests override the same repository dependency with the thread-safe in-memory `ReportStore`.
+Production requests receive SQLAlchemy sessions through FastAPI dependency injection and use PostgreSQL-backed repository implementations. Tests override those dependencies with in-memory implementations. This keeps the HTTP and validation layers independent of concrete persistence while supporting the reports, cases, approvals, and audit workflow.
 
 This keeps the HTTP layer independent of a specific persistence implementation.
 
